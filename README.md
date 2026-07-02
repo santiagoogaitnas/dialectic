@@ -1,6 +1,6 @@
 # Dialectic
 
-Two Claude Code agents working on your project in a continuous back-and-forth loop, with a third process (the curator) that periodically compresses their conversation and resets their context so the loop can run for hours without degrading.
+Two Claude Code agents working on your project in a continuous back-and-forth loop that can run indefinitely. A third process (the curator) periodically distills their conversation into a dense recap and restarts them from it, so the agents never hit the context wall and never degrade.
 
 ## What it does
 
