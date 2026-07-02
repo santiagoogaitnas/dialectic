@@ -169,7 +169,10 @@ def test_main_allows_project_outside_repo(isolated_registry, tmp_path):
     proj = tmp_path / "outside-proj"
     proj.mkdir()
     sentinel = RuntimeError("past-leak-guard")
-    with patch("subprocess.run", side_effect=sentinel):
+    # shutil.which is stubbed so the preflight binary check passes even on
+    # machines without tmux/claude installed — this test is about the guard.
+    with patch("shutil.which", return_value="/usr/bin/stub"), \
+         patch("subprocess.run", side_effect=sentinel):
         with pytest.raises(RuntimeError, match="past-leak-guard"):
             _run_chain_main([
                 "chain.py", "seed", "--project", str(proj),

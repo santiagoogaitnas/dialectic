@@ -141,7 +141,10 @@ def test_max_chains_guard_counts_only_same_project(isolated_registry, tmp_path):
     my_project.mkdir()
 
     sentinel = RuntimeError("boot-path-reached")
-    with patch("subprocess.run", side_effect=sentinel):
+    # shutil.which stubbed: the preflight binary check must pass even on
+    # machines without tmux/claude — this test is about the per-project count.
+    with patch("shutil.which", return_value="/usr/bin/stub"), \
+         patch("subprocess.run", side_effect=sentinel):
         with pytest.raises(RuntimeError, match="boot-path-reached"):
             _run_chain_main([
                 "chain.py", "seed",
@@ -207,7 +210,10 @@ def test_below_limit_passes_guard(isolated_registry, tmp_path):
     proj = tmp_path / "proj"
     proj.mkdir()
     sentinel = RuntimeError("past-guard")
-    with patch("subprocess.run", side_effect=sentinel):
+    # shutil.which stubbed: the preflight binary check must pass even on
+    # machines without tmux/claude — this test is about the guard passing.
+    with patch("shutil.which", return_value="/usr/bin/stub"), \
+         patch("subprocess.run", side_effect=sentinel):
         with pytest.raises(RuntimeError, match="past-guard"):
             _run_chain_main([
                 "chain.py", "seed", "--project", str(proj), "--max-chains", "5",

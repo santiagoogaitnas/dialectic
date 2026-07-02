@@ -23,31 +23,48 @@ The value, concretely:
 
 ## Get started
 
+Once:
+
 ```bash
 git clone https://github.com/santiagoogaitnas/dialectic.git
 cd dialectic
-
-python3 chain.py "Read the README and figure out what to build next." --project /path/to/your/project
 ```
 
-That's it. The chain registers itself, opens a tmux session, and starts the loop.
-
-Watch it:
+**1. Start a chain** — one command: your instruction, and the project the agents work on.
 
 ```bash
-python3 chain.py --attach <chain-id>            # attach your terminal to the agents' tmux
-tail -f chainwork/<chain-id>/chain_log.md       # follow the conversation transcript
+python3 chain.py "tighten up the onboarding flow" --project ~/code/myapp
 ```
 
-Manage it:
+That runs the default pairing, builder + thinker. Want a different pairing? Same command, two flags:
 
 ```bash
-python3 chain.py --list                # all chains, with status and project
-python3 chain.py --stop <chain-id>     # stop a chain
-python3 chain.py --list-roles          # available role files
+python3 chain.py "tighten up the onboarding flow" --project ~/code/myapp \
+    --role-a builder.txt --role-b contrarian.txt
 ```
 
-Output lands in your project directory: whatever the agents build, plus a `plan-<chain-id>.md` working doc. Logs and curator notes live in `chainwork/<chain-id>/` inside this repo.
+(`python3 chain.py --list-roles` prints every role with a one-line preview.)
+
+After a few seconds of setup it tells you what you have and what to type next:
+
+```
+Chain 07021530-ab12 launching.
+  watch:  tmux attach -t chain-07021530-ab12    (run this in another terminal)
+  stop:   Ctrl+C here, or: python3 chain.py --stop 07021530-ab12
+This terminal runs the relay loop — leave it open.
+```
+
+**2. Watch the agents** — open a second terminal and paste the watch line:
+
+```bash
+tmux attach -t chain-07021530-ab12
+```
+
+You're now looking at the two agents side by side, talking to each other and working in your project. Close the tab (or detach with `Ctrl-b` then `d`) whenever you like — they keep going.
+
+**3. Stop** — `Ctrl+C` in the launch terminal, or `python3 chain.py --stop <chain-id>` from anywhere. `python3 chain.py --list` shows every chain with its status and project.
+
+Output lands in your project directory: whatever the agents build, plus a `plan-<chain-id>.md` working doc. Logs and curator notes live in `chainwork/<chain-id>/` inside this repo (`tail -f chainwork/<chain-id>/chain_log.md` follows the transcript).
 
 ## Web dashboard
 
@@ -128,6 +145,9 @@ The agents run with `--dangerously-skip-permissions`: they execute commands and 
 
 **A chain died / my machine rebooted. Did I lose the work?**
 No. The agents' output is ordinary files in your project, and their plan file survives. Launch a new chain with the same command and the agents read what's already there and continue.
+
+**The agents never started on my very first run.**
+Attach to the tmux session (the launch output prints the exact command) and look at the panes. The first time Claude Code runs in `--dangerously-skip-permissions` mode on a machine, it shows a one-time acceptance prompt that blocks the agents from booting. Accept it in the pane, stop the chain, and relaunch — every run after that is clean. (Missing `tmux` or `claude` binaries are caught before launch with a clear error.)
 
 **The loop stopped advancing but the agents look fine.**
 Dialectic detects when an agent is done responding by watching Claude Code's terminal UI, and that UI changes between Claude Code versions. If idle detection breaks after a Claude Code update, that's the most likely cause — check `chainwork/<chain-id>/chain_log.md` to see where it stalled, and open an issue.

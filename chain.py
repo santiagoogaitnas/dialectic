@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -87,6 +88,31 @@ def _reject_project_inside_repo(project_path: Path) -> None:
             f"project directory. Resolved project path: {project_path}."
         )
         sys.exit(2)
+
+
+def _preflight_binaries() -> None:
+    """Fail with a clear one-liner when a required binary is missing.
+
+    Called from ``__main__`` after the launch guards and before any side
+    effect (registry write, tmux session). Without this, a missing tmux
+    surfaces as a raw traceback and a missing/unauthenticated claude as a
+    60-second silent hang followed by "Agent A didn't start".
+    """
+    problems = []
+    if shutil.which("tmux") is None:
+        problems.append(
+            "tmux not found on PATH. Install it first "
+            "(macOS: brew install tmux, Debian/Ubuntu: apt install tmux)."
+        )
+    if shutil.which("claude") is None:
+        problems.append(
+            "claude (the Claude Code CLI) not found on PATH. Install and "
+            "authenticate it first: https://docs.anthropic.com/en/docs/claude-code"
+        )
+    if problems:
+        for p in problems:
+            logger.error(p)
+        sys.exit(1)
 
 
 PROMPT_A = load_role("builder.txt")
@@ -854,12 +880,20 @@ def run_chain(seed: str, prompt_a: str = PROMPT_A, prompt_b: str = PROMPT_B,
     time.sleep(15)
 
     if not wait_for_idle(pane_a, timeout=60):
-        logger.error(f"Agent A didn't start. Check: tmux attach -t {session}")
+        logger.error(
+            f"Agent A didn't start. Check: tmux attach -t {session} — the pane "
+            "may be showing Claude Code's one-time permissions prompt; accept "
+            "it there and relaunch."
+        )
         if record:
             reg.unregister_chain(cfg.chain_id)
         return
     if not wait_for_idle(pane_b, timeout=60):
-        logger.error(f"Agent B didn't start. Check: tmux attach -t {session}")
+        logger.error(
+            f"Agent B didn't start. Check: tmux attach -t {session} — the pane "
+            "may be showing Claude Code's one-time permissions prompt; accept "
+            "it there and relaunch."
+        )
         if record:
             reg.unregister_chain(cfg.chain_id)
         return
@@ -1232,6 +1266,8 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
+    _preflight_binaries()
+
     chain_id = reg.generate_chain_id()
     session_name = args.session or f"chain-{chain_id}"
 
@@ -1242,6 +1278,17 @@ if __name__ == "__main__":
         role_a=args.role_a,
         role_b=args.role_b,
         project=project_str,
+    )
+
+    # Plain-stdout launch card: the one thing a user needs after launching is
+    # the exact command to see the agents (and the one to stop them). The
+    # chain id otherwise only appears inside INFO log lines.
+    print(
+        f"\nChain {chain_id} launching.\n"
+        f"  watch:  tmux attach -t {session_name}    (run this in another terminal)\n"
+        f"  stop:   Ctrl+C here, or: python3 chain.py --stop {chain_id}\n"
+        f"This terminal runs the relay loop — leave it open.\n",
+        flush=True,
     )
 
     SESSION = session_name
