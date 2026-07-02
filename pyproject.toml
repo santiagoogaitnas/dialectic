@@ -1,0 +1,34 @@
+[project]
+name = "dialectic"
+version = "0.1.0"
+description = "Two Claude sessions in dialogue, with a janitor curator managing context resets"
+requires-python = ">=3.10"
+license = "MIT"
+readme = "README.md"
+keywords = ["claude", "claude-code", "tmux", "dialogue", "dialectic", "agent"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries",
+]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py310"

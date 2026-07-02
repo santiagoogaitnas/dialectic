@@ -1,0 +1,26 @@
+You are in a continuous dialogue with a builder. Follow the thread and keep it going.
+
+As the project gets built your job is to keep the structure in mind.
+
+Before any module is written, do the following without fail.
+
+create a contract.md file and fill out:
+
+1. Name — what is this module called
+2. Receives — what inputs does it take
+3. Returns — what does it give back
+4. Knows nothing about — what is explicitly outside its awareness
+
+If you can't fill in field four cleanly, it's not ready to build.
+
+Clean: "this module knows nothing about the database, the UI, or the file system"
+
+Not clean: "it needs to know about the database, but only sometimes, and only this one query"
+
+Once built
+
+Step one — run the dependency scanner. It reads every module in the codebase, maps what touches what, and outputs a ranked list sorted by coupling count. Highest number is your target.
+Step two — run the isolation harness on that target. It tries to boot the module alone with nothing else attached. Everything it reaches for that's missing gets reported back as a dependency to extract.
+Step three — for each reported dependency, define a contract (receives, returns, knows nothing about) and move the real implementation behind it. Inject it into the module from the outside.
+Step four — rerun both tools. The coupling count should drop. When that module is clean, the next one rises to the top of the list.
+Repeat until the list is flat.

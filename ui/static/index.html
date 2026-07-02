@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dialectic — Chain Dashboard</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-dim: #8b949e;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --font: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+header h1 { font-size: 18px; color: var(--accent); font-weight: 600; }
+header .meta { color: var(--text-dim); font-size: 12px; }
+
+/* Launch panel */
+.launch-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.launch-panel h2 { font-size: 14px; margin-bottom: 10px; color: var(--text); }
+.launch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.launch-grid .full { grid-column: 1 / -1; }
+label { display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 5px; }
+input, select, textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 6px 8px;
+}
+textarea { resize: vertical; min-height: 60px; }
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+/* Highlighted project-directory field — this is the most important input */
+.project-field { margin-bottom: 4px; }
+.project-row { display: flex; gap: 8px; align-items: stretch; }
+.project-row input { flex: 1; min-width: 0; }
+.project-field input {
+  font-size: 14px;
+  padding: 10px 12px;
+  border-width: 2px;
+}
+.project-field input:invalid:not(:placeholder-shown) {
+  border-color: var(--red);
+}
+.browse-btn {
+  background: var(--surface);
+  color: var(--text);
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  padding: 0 16px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.browse-btn:hover { border-color: var(--accent); color: var(--accent); }
+.project-validation {
+  font-size: 11px;
+  margin-top: 6px;
+  line-height: 1.4;
+  min-height: 1em;
+  overflow-wrap: anywhere;
+}
+.project-validation.ok { color: var(--green); }
+.project-validation.bad { color: var(--red); }
+.project-label {
+  color: var(--text) !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  margin-bottom: 4px !important;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+.project-hint {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.required {
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+.optional {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: lowercase;
+}
+
+button {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:hover { opacity: 0.9; }
+button.danger { background: var(--red); color: #fff; }
+button.secondary { background: var(--border); color: var(--text); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Chain cards */
+.chains-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.chains-header h2 { font-size: 14px; }
+
+.chain-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.chain-card.running { border-left: 3px solid var(--green); }
+.chain-card.resetting { border-left: 3px solid var(--yellow); }
+.chain-card.starting { border-left: 3px solid var(--yellow); }
+.chain-card.stopped { border-left: 3px solid var(--text-dim); }
+.chain-card.dead { border-left: 3px solid var(--red); }
+/* Conflict state: an overlapping file claim with another live chain on the
+   same project. Draws a subtle red glow so it's visible regardless of the
+   status border color on the left edge. */
+.chain-card.in-conflict {
+  box-shadow: inset 0 0 0 1px var(--red);
+}
+.chain-conflict-pill {
+  display: inline-block;
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--red);
+  border: 1px solid var(--red);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  vertical-align: middle;
+}
+/* Claim-rate pill: per-chain count of `--claim` activity entries in the
+   rolling window. Neutral when the chain is claiming; amber when zero,
+   since a live chain that never claims is likely editing without the
+   coordination CLI. Matches the conflict-pill sizing so the chain card
+   header stays balanced when both are present. */
+.chain-claim-badge {
+  display: inline-block;
+  background: rgba(76, 175, 80, 0.12);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+  letter-spacing: 0.3px;
+  vertical-align: middle;
+}
+.chain-claim-badge.zero {
+  background: rgba(210, 153, 34, 0.18);
+  color: #d29922;
+  border-color: #d29922;
+}
+.project-conflict-badge {
+  display: inline-block;
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--red);
+  border: 1px solid var(--red);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 10px;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.chain-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.chain-id { font-weight: 600; color: var(--accent); font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.chain-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.chain-status.running { background: rgba(63,185,80,0.15); color: var(--green); }
+.chain-status.resetting { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.chain-status.starting { background: rgba(210,153,34,0.15); color: var(--yellow); }
+.chain-status.stopped { background: rgba(139,148,158,0.15); color: var(--text-dim); }
+.chain-status.dead { background: rgba(248,81,73,0.15); color: var(--red); }
+
+.chain-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.chain-meta div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chain-meta span { color: var(--text); }
+
+.chain-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.chain-actions button { padding: 4px 10px; font-size: 11px; }
+
+/* Log viewer */
+.log-viewer {
+  display: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+  margin-top: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.log-viewer.visible { display: block; }
+
+.empty-state {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 40px;
+  font-size: 13px;
+}
+
+/* Toolbar: filter + view toggle */
+.chains-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.chains-toolbar input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.view-toggle button {
+  background: var(--surface);
+  color: var(--text-dim);
+  border: none;
+  border-radius: 0;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.view-toggle button.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+.filter-count {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Project group (grouped view) */
+.project-group { margin-bottom: 16px; }
+.project-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.project-group-header:hover { border-color: var(--accent); }
+.project-group-title {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 12px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-group-count {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--bg);
+  border-radius: 10px;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-group-caret {
+  color: var(--text-dim);
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+.project-group.collapsed .project-group-caret { transform: rotate(-90deg); }
+.project-group.collapsed .project-group-body { display: none; }
+.project-group-body { border-left: 2px solid var(--border); margin-left: 6px; padding-left: 8px; }
+.project-group-body .chain-card:last-child { margin-bottom: 0; }
+
+/* Relative time hint */
+.rel-time { cursor: help; }
+
+/* Clickable card */
+.chain-card { cursor: pointer; }
+.chain-card:hover { border-color: var(--accent); }
+.chain-actions button { cursor: pointer; }
+
+/* Seed preview in chain card */
+.chain-seed {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+/* Live badge */
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.live-dot.stale { background: var(--text-dim); }
+
+/* Directory picker modal */
+.picker-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 110;
+  overflow: auto;
+}
+.picker-overlay.open { display: block; }
+.picker-panel {
+  max-width: 720px;
+  margin: 40px auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px;
+}
+.picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.picker-header h2 { font-size: 15px; color: var(--accent); }
+.picker-path {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: auto;
+}
+.picker-entries {
+  max-height: 50vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+}
+.picker-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 12px;
+}
+.picker-entry:last-child { border-bottom: none; }
+.picker-entry:hover { background: var(--surface); }
+.picker-entry.parent { color: var(--text-dim); }
+.picker-entry .name { flex: 1; overflow: hidden; text-overflow: ellipsis; min-width: 0; white-space: nowrap; }
+.picker-entry .badge {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--bg);
+  margin-left: 8px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+.picker-entry .hidden-tag { color: var(--text-dim); font-size: 10px; margin-left: 6px; }
+.picker-suggestions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.picker-suggestions button {
+  background: var(--border);
+  color: var(--text);
+  font-size: 11px;
+  padding: 4px 10px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  gap: 8px;
+}
+.picker-footer > div { display: flex; gap: 8px; align-items: center; }
+.picker-footer .pick-here {
+  background: var(--green);
+  color: var(--bg);
+}
+.picker-footer .pick-and-launch {
+  background: var(--accent);
+  color: var(--bg);
+}
+/* Flash for fields the picker's Use & Launch fallback needs to highlight when
+   launch couldn't fire because a required field is still empty. */
+@keyframes fieldFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.6); border-color: var(--red); }
+  70%  { box-shadow: 0 0 0 6px rgba(248, 81, 73, 0); border-color: var(--red); }
+  100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0); }
+}
+.field-flash {
+  animation: fieldFlash 1.2s ease-out 2;
+}
+.picker-controls label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  margin-right: 12px;
+  cursor: pointer;
+}
+.picker-controls input[type="checkbox"] { width: auto; }
+.picker-error {
+  color: var(--red);
+  font-size: 11px;
+  padding: 6px 0;
+}
+
+/* Detail view — full-screen overlay */
+.detail-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 100;
+  overflow: auto;
+}
+.detail-overlay.open { display: block; }
+.detail-panel {
+  max-width: 1000px;
+  margin: 24px auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+}
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-header h2 {
+  font-size: 16px;
+  color: var(--accent);
+}
+.detail-close {
+  background: var(--border);
+  color: var(--text);
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+}
+.detail-close:hover { background: var(--red); color: #fff; }
+
+.detail-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 6px 20px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+.detail-meta div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-meta span { color: var(--text); }
+.detail-seed {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+  max-height: 80px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.detail-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border);
+}
+.detail-tab {
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  padding: 8px 14px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.detail-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.detail-pane {
+  display: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  padding: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.detail-pane.active { display: block; }
+.detail-pane.muted { color: var(--text-dim); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Dialectic</h1>
+    <div class="meta">Multi-chain coordination dashboard</div>
+  </header>
+
+  <!-- Launch panel -->
+  <div class="launch-panel" id="launchPanel">
+    <h2>Launch New Chain</h2>
+    <div class="launch-grid">
+      <div class="full project-field">
+        <label class="project-label" for="project">Project directory <span class="required">required</span></label>
+        <div class="project-row">
+          <input id="project" type="text" placeholder="/absolute/path/to/project"
+                 spellcheck="false" autocomplete="off" required
+                 oninput="onProjectInputChange()">
+          <button type="button" class="browse-btn" onclick="openPicker()">Browse…</button>
+        </div>
+        <div class="project-hint">Agents run inside this directory with full tool access. They read, write, and iterate on the code here.</div>
+        <div id="projectValidation" class="project-validation"></div>
+      </div>
+      <div class="full">
+        <label for="seed">Seed topic</label>
+        <textarea id="seed" placeholder="What should the agents work on? e.g. 'Read the README and figure out what to build next.' or 'The auth module has a flaky test — find and fix it.'"></textarea>
+      </div>
+      <div>
+        <label for="roleA">Role A</label>
+        <select id="roleA"></select>
+      </div>
+      <div>
+        <label for="roleB">Role B</label>
+        <select id="roleB"></select>
+      </div>
+      <div>
+        <label for="focus">Focus area <span class="optional">optional</span></label>
+        <input id="focus" type="text" placeholder="e.g. backend, tests, frontend"
+               spellcheck="false" autocomplete="off"
+               title="Shown to other chains on this project so you can divide work without collisions.">
+      </div>
+      <div>
+        <label for="session">Session name <span class="optional">optional</span></label>
+        <input id="session" type="text" placeholder="auto-generated">
+      </div>
+      <div class="full" style="display:flex;align-items:flex-end;justify-content:flex-end">
+        <button id="launchBtn" onclick="launchChain()">Launch Chain</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chain list -->
+  <div class="chains-header">
+    <h2>Chains <span id="liveBadge"><span class="live-dot stale" id="liveDot"></span><span id="liveText" style="color:var(--text-dim);font-size:11px;font-weight:normal">connecting…</span></span></h2>
+    <button class="secondary" onclick="refreshChains()">Refresh</button>
+  </div>
+  <div class="chains-toolbar">
+    <input type="text" id="chainFilter" placeholder="Filter by chain id, session, project, or seed..."
+           oninput="onFilterChange()">
+    <span class="filter-count" id="filterCount"></span>
+    <div class="view-toggle" role="tablist" aria-label="View mode">
+      <button id="viewFlatBtn" onclick="setViewMode('flat')"
+              title="Flat list, sorted by status">Flat</button>
+      <button id="viewGroupedBtn" class="active" onclick="setViewMode('grouped')"
+              title="Group by project — see all chains running on a project at once">By project</button>
+    </div>
+  </div>
+  <div id="chainList">
+    <div class="empty-state">No chains running. Launch one above.</div>
+  </div>
+</div>
+
+<!-- Directory picker modal -->
+<div class="picker-overlay" id="pickerOverlay" onclick="onPickerBackdropClick(event)">
+  <div class="picker-panel" onclick="event.stopPropagation()">
+    <div class="picker-header">
+      <h2>Pick project directory</h2>
+      <button class="detail-close" onclick="closePicker()">Close &times;</button>
+    </div>
+    <div class="picker-suggestions" id="pickerSuggestions"></div>
+    <div class="picker-path" id="pickerCurrentPath">/</div>
+    <div class="picker-controls" style="margin-bottom:8px">
+      <label><input type="checkbox" id="pickerHidden" onchange="refreshPicker()"> Show hidden</label>
+    </div>
+    <div class="picker-entries" id="pickerEntries"></div>
+    <div class="picker-error" id="pickerError"></div>
+    <div class="picker-footer">
+      <span id="pickerStatus" style="color:var(--text-dim);font-size:11px"></span>
+      <div>
+        <button class="secondary" onclick="closePicker()">Cancel</button>
+        <button class="pick-here" id="pickerPickBtn" onclick="pickCurrentDir()">Use this folder</button>
+        <button class="pick-and-launch" id="pickerPickAndLaunchBtn" onclick="pickAndLaunch()" title="Fill the project field and launch immediately (needs seed set)">Use &amp; Launch</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Chain detail overlay -->
+<div class="detail-overlay" id="detailOverlay" onclick="onDetailBackdropClick(event)">
+  <div class="detail-panel" onclick="event.stopPropagation()">
+    <div class="detail-header">
+      <h2 id="detailTitle">Chain</h2>
+      <button class="detail-close" onclick="closeDetail()">Close &times;</button>
+    </div>
+    <div class="detail-meta" id="detailMeta"></div>
+    <div class="detail-seed" id="detailSeed"></div>
+    <div class="detail-tabs">
+      <button class="detail-tab active" data-pane="log" onclick="selectDetailTab('log')">Log</button>
+      <button class="detail-tab" data-pane="plan" onclick="selectDetailTab('plan')">Plan</button>
+      <button class="detail-tab" data-pane="bulletin" onclick="selectDetailTab('bulletin')">Bulletin</button>
+    </div>
+    <div class="detail-pane active" id="detailPaneLog">(loading…)</div>
+    <div class="detail-pane" id="detailPanePlan">(loading…)</div>
+    <div class="detail-pane" id="detailPaneBulletin">(loading…)</div>
+  </div>
+</div>
+
+<script>
+const API = '';
+const sseStreams = {};  // chain_id -> EventSource (per-chain, for detail log tail)
+let listStream = null;  // EventSource for /api/events
+let listStreamLastMsg = 0;
+let lastChains = [];
+let viewMode = localStorage.getItem('dialectic_view_mode') || 'grouped';  // 'flat' | 'grouped'
+let filterText = '';
+let openDetailId = null;
+let detailPollTimer = null;  // re-fetches plan/bulletin every 5s while detail view is open
+const collapsedProjects = new Set(
+  JSON.parse(localStorage.getItem('dialectic_collapsed_projects') || '[]')
+);
+
+function relTime(ts) {
+  if (!ts) return '?';
+  const diff = Date.now() / 1000 - ts;
+  if (diff < 0) return 'now';
+  if (diff < 60) return Math.floor(diff) + 's ago';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
+function projectKey(c) {
+  return c.project && c.project.trim() ? c.project : '(no project)';
+}
+
+function matchesFilter(c, q) {
+  if (!q) return true;
+  const hay = [
+    c.chain_id, c.session, c.project, c.seed, c.role_a, c.role_b, c.status,
+  ].filter(Boolean).join(' ').toLowerCase();
+  return hay.includes(q);
+}
+
+function sortChains(chains) {
+  const order = {running: 0, resetting: 0, starting: 1, dead: 2, stopped: 3};
+  return chains.slice().sort((a, b) => {
+    const oa = order[a.status] ?? 4, ob = order[b.status] ?? 4;
+    if (oa !== ob) return oa - ob;
+    return (b.started_at || 0) - (a.started_at || 0);
+  });
+}
+
+function setViewMode(mode) {
+  viewMode = mode;
+  localStorage.setItem('dialectic_view_mode', mode);
+  document.getElementById('viewFlatBtn').classList.toggle('active', mode === 'flat');
+  document.getElementById('viewGroupedBtn').classList.toggle('active', mode === 'grouped');
+  renderChainList();
+}
+
+function onFilterChange() {
+  filterText = document.getElementById('chainFilter').value.trim().toLowerCase();
+  renderChainList();
+}
+
+function toggleProjectGroup(key) {
+  if (collapsedProjects.has(key)) {
+    collapsedProjects.delete(key);
+  } else {
+    collapsedProjects.add(key);
+  }
+  localStorage.setItem(
+    'dialectic_collapsed_projects',
+    JSON.stringify([...collapsedProjects])
+  );
+  renderChainList();
+}
+
+async function fetchJSON(url, opts) {
+  const res = await fetch(API + url, opts);
+  return res.json();
+}
+
+async function loadRoles() {
+  try {
+    const roles = await fetchJSON('/api/roles');
+    const selA = document.getElementById('roleA');
+    const selB = document.getElementById('roleB');
+    roles.forEach(r => {
+      selA.add(new Option(r, r, r === 'builder.txt', r === 'builder.txt'));
+      selB.add(new Option(r, r, r === 'thinker.txt', r === 'thinker.txt'));
+    });
+  } catch (e) {
+    console.error('Failed to load roles:', e);
+  }
+}
+
+let projectFocusMap = {};  // project path -> [focus strings]
+let projectConflictMap = {};  // project path -> {count: N, chainIds: Set<string>}
+let projectClaimRateMap = {}; // project path -> {total: N, perChain: Map<chain_id, count>, windowSeconds: N}
+
+async function refreshChains() {
+  try {
+    lastChains = await fetchJSON('/api/chains');
+    renderChainList();
+  } catch (e) {
+    console.error('Failed to refresh chains:', e);
+  }
+}
+
+async function refreshProjectFocus() {
+  try {
+    const groups = await fetchJSON('/api/projects');
+    const focusMap = {};
+    const conflictMap = {};
+    const claimRateMap = {};
+    for (const g of groups) {
+      const focuses = (g.focus_areas || []).filter(Boolean);
+      if (focuses.length) focusMap[g.project] = focuses;
+      const count = g.conflict_count || 0;
+      const ids = new Set(
+        (g.chains || []).filter(c => c.in_conflict).map(c => c.chain_id)
+      );
+      if (count > 0 || ids.size > 0) {
+        conflictMap[g.project] = {count, chainIds: ids};
+      }
+      const perChain = new Map();
+      for (const ch of (g.chains || [])) {
+        perChain.set(ch.chain_id, ch.recent_claims || 0);
+      }
+      claimRateMap[g.project] = {
+        total: g.recent_claim_total || 0,
+        perChain,
+        windowSeconds: g.claim_rate_window_seconds || 3600,
+      };
+    }
+    projectFocusMap = focusMap;
+    projectConflictMap = conflictMap;
+    projectClaimRateMap = claimRateMap;
+    // Re-render unconditionally — conflict pills and claim badges apply to
+    // flat view too, so a poll that finds no grouped changes can still
+    // carry badge updates that need a re-paint.
+    renderChainList();
+  } catch (e) {
+    // Coordination file unreadable shouldn't blank the dashboard.
+  }
+}
+
+function chainInConflict(c) {
+  const entry = projectConflictMap[projectKey(c)];
+  return !!(entry && entry.chainIds && entry.chainIds.has(c.chain_id));
+}
+
+function chainClaimInfo(c) {
+  // Returns {count, windowSeconds, hasData} — hasData is false when the
+  // chain's project hasn't reported anywhere in the last poll (no entry
+  // means we shouldn't claim "0 claims" authoritatively). `renderChainCard`
+  // uses hasData to skip rendering the badge in that case so the flat-view
+  // fallback on a chain with missing project data doesn't flag false
+  // negatives.
+  const entry = projectClaimRateMap[projectKey(c)];
+  if (!entry) return {count: 0, windowSeconds: 3600, hasData: false};
+  const count = entry.perChain ? (entry.perChain.get(c.chain_id) || 0) : 0;
+  return {count, windowSeconds: entry.windowSeconds || 3600, hasData: true};
+}
+
+function formatClaimWindow(seconds) {
+  // Compact label for the badge ("1h", "30m", "2h"). The default is 1h,
+  // so most renders hit the fast path.
+  const s = Number(seconds) || 3600;
+  if (s >= 3600) {
+    const h = Math.round(s / 3600);
+    return `${h}h`;
+  }
+  if (s >= 60) {
+    const m = Math.round(s / 60);
+    return `${m}m`;
+  }
+  return `${Math.round(s)}s`;
+}
+
+function renderChainList() {
+  const container = document.getElementById('chainList');
+  const countEl = document.getElementById('filterCount');
+
+  if (!lastChains.length) {
+    container.innerHTML = '<div class="empty-state">No chains registered. Launch one above.</div>';
+    countEl.textContent = '';
+    return;
+  }
+
+  const visible = lastChains.filter(c => matchesFilter(c, filterText));
+  countEl.textContent = filterText
+    ? `${visible.length} of ${lastChains.length}`
+    : `${lastChains.length} total`;
+
+  if (!visible.length) {
+    container.innerHTML = '<div class="empty-state">No chains match the filter.</div>';
+    return;
+  }
+
+  if (viewMode === 'grouped') {
+    container.innerHTML = renderGrouped(visible);
+  } else {
+    container.innerHTML = sortChains(visible).map(renderChainCard).join('');
+  }
+}
+
+function renderGrouped(chains) {
+  // Bucket by project, sort groups by active-count desc then key asc.
+  const groups = new Map();
+  for (const c of chains) {
+    const key = projectKey(c);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  }
+  const entries = [...groups.entries()].sort((a, b) => {
+    const activeA = a[1].filter(c => c.status === 'running' || c.status === 'resetting').length;
+    const activeB = b[1].filter(c => c.status === 'running' || c.status === 'resetting').length;
+    if (activeA !== activeB) return activeB - activeA;
+    return a[0].localeCompare(b[0]);
+  });
+
+  return entries.map(([key, list]) => {
+    const active = list.filter(c => c.status === 'running' || c.status === 'resetting').length;
+    const dead = list.filter(c => c.status === 'dead').length;
+    const collapsed = collapsedProjects.has(key);
+    const body = sortChains(list).map(renderChainCard).join('');
+    const shortKey = key.length > 70 ? '...' + key.slice(-67) : key;
+    const deadNote = dead ? ` <span style="color:var(--red)">· ${dead} dead</span>` : '';
+    const focuses = projectFocusMap[key] || [];
+    const focusNote = focuses.length
+      ? ` <span style="color:var(--text-dim)">· focus: ${focuses.map(escapeHtml).join(', ')}</span>`
+      : '';
+    const conflictEntry = projectConflictMap[key];
+    const conflictCount = conflictEntry ? conflictEntry.count : 0;
+    const conflictBadge = conflictCount > 0
+      ? ` <span class="project-conflict-badge" title="Files claimed by more than one live chain on this project">⚠ ${conflictCount} conflict${conflictCount === 1 ? '' : 's'}</span>`
+      : '';
+    const claimRateEntry = projectClaimRateMap[key];
+    const claimTotal = claimRateEntry ? claimRateEntry.total : 0;
+    const claimWindow = formatClaimWindow(claimRateEntry ? claimRateEntry.windowSeconds : 3600);
+    const claimNote = claimRateEntry && active > 0
+      ? ` <span style="color:var(--text-dim)">· ${claimTotal} claim${claimTotal === 1 ? '' : 's'} (${claimWindow})</span>`
+      : '';
+    return `
+      <div class="project-group ${collapsed ? 'collapsed' : ''}">
+        <div class="project-group-header" onclick="toggleProjectGroup(${JSON.stringify(key)})">
+          <span class="project-group-caret">&#9660;</span>
+          <span class="project-group-title" title="${escapeHtml(key)}">${escapeHtml(shortKey)}</span>
+          <span class="project-group-count">${active}/${list.length} active${focusNote}${claimNote}${deadNote}</span>${conflictBadge}
+        </div>
+        <div class="project-group-body">${body}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderChainCard(c) {
+  const status = c.status || 'unknown';
+  const seed = (c.seed || '').length > 120 ? c.seed.slice(0, 120) + '...' : (c.seed || '');
+  const project = c.project ? c.project : '(no project)';
+  const startedAbs = c.started_at_str || (c.started_at ? new Date(c.started_at * 1000).toLocaleString() : '?');
+  const activityAbs = c.last_activity_str || (c.last_activity ? new Date(c.last_activity * 1000).toLocaleString() : '?');
+  const startedRel = relTime(c.started_at);
+  const activityRel = relTime(c.last_activity);
+  const inConflict = chainInConflict(c);
+  const conflictClass = inConflict ? ' in-conflict' : '';
+  const conflictPill = inConflict
+    ? ' <span class="chain-conflict-pill" title="Another chain on this project has claimed a file this chain also claims">⚠ conflict</span>'
+    : '';
+  // Claim-rate badge: only render for chains whose project reported in the
+  // last poll. A live chain with 0 claims inside the window is likely
+  // editing without the coordination CLI; flag amber via the `.zero`
+  // modifier so the operator can spot it at a glance.
+  const claimInfo = chainClaimInfo(c);
+  const claimBadge = claimInfo.hasData && c.project
+    ? ` <span class="chain-claim-badge${claimInfo.count === 0 ? ' zero' : ''}" title="claim activity in the last ${formatClaimWindow(claimInfo.windowSeconds)}: ${claimInfo.count}">claims ${claimInfo.count}/${formatClaimWindow(claimInfo.windowSeconds)}</span>`
+    : '';
+
+  return `
+    <div class="chain-card ${status}${conflictClass}" onclick="onCardClick(event, '${c.chain_id}')">
+      <div class="chain-header">
+        <span class="chain-id" title="${c.chain_id}">${c.chain_id}${conflictPill}${claimBadge}</span>
+        <span class="chain-status ${status}">${status}</span>
+      </div>
+      <div class="chain-meta">
+        <div>Session: <span title="${escapeHtml(c.session || '')}">${c.session || '?'}</span></div>
+        <div>Round: <span>${c.current_round || 0}</span></div>
+        <div>Roles: <span>${c.role_a || '?'} / ${c.role_b || '?'}</span></div>
+        <div>Started: <span class="rel-time" title="${escapeHtml(startedAbs)}">${startedRel}</span></div>
+        <div>Activity: <span class="rel-time" title="${escapeHtml(activityAbs)}">${activityRel}</span></div>
+        <div>Project: <span title="${escapeHtml(c.project || '')}">${project.length > 35 ? '...' + project.slice(-32) : escapeHtml(project)}</span></div>
+      </div>
+      <div class="chain-seed">Seed: ${escapeHtml(seed)}</div>
+      <div class="chain-actions" data-no-detail="1">
+        ${status === 'running' || status === 'resetting' || status === 'starting'
+          ? `<button class="danger" onclick="stopChain('${c.chain_id}')">Stop</button>` : ''}
+        <button class="secondary" onclick="openDetail('${c.chain_id}')">Details</button>
+        <button class="secondary" onclick="openTmux('${c.session}')">tmux</button>
+      </div>
+    </div>
+  `;
+}
+
+function onCardClick(ev, chainId) {
+  // Don't open detail if a button inside the actions row was clicked.
+  let el = ev.target;
+  while (el && el !== ev.currentTarget) {
+    if (el.dataset && el.dataset.noDetail) return;
+    el = el.parentElement;
+  }
+  openDetail(chainId);
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function launchChain() {
+  const projectEl = document.getElementById('project');
+  const seedEl = document.getElementById('seed');
+  const project = projectEl.value.trim();
+  const seed = seedEl.value.trim();
+  const focus = (document.getElementById('focus').value || '').trim();
+
+  if (!project) {
+    alert('Project directory is required. Point the agents at a real directory.');
+    projectEl.focus();
+    return;
+  }
+  if (!seed) {
+    alert('Seed topic is required. Describe what the agents should work on.');
+    seedEl.focus();
+    return;
+  }
+
+  const btn = document.getElementById('launchBtn');
+  btn.disabled = true;
+  btn.textContent = 'Launching...';
+
+  try {
+    const body = {
+      seed,
+      role_a: document.getElementById('roleA').value,
+      role_b: document.getElementById('roleB').value,
+      project,
+      session: document.getElementById('session').value || null,
+    };
+    if (focus) body.focus = focus;
+    const res = await fetch(API + '/api/chains', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    // Clear session + focus fields so next launch gets fresh auto-name
+    document.getElementById('session').value = '';
+    document.getElementById('focus').value = '';
+    setTimeout(refreshChains, 3000);
+  } catch (e) {
+    alert('Launch failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Launch Chain';
+  }
+}
+
+// ---- Project-input validation ----
+
+let projectValidationTimer = null;
+function onProjectInputChange() {
+  clearTimeout(projectValidationTimer);
+  const el = document.getElementById('projectValidation');
+  el.textContent = '';
+  el.className = 'project-validation';
+  projectValidationTimer = setTimeout(runProjectValidation, 400);
+}
+
+async function runProjectValidation() {
+  const value = document.getElementById('project').value.trim();
+  const el = document.getElementById('projectValidation');
+  if (!value) { el.textContent = ''; el.className = 'project-validation'; return; }
+  try {
+    const data = await fetchJSON(
+      '/api/validate_project?path=' + encodeURIComponent(value)
+    );
+    if (data.ok) {
+      el.textContent = '\u2713 ' + value;
+      el.className = 'project-validation ok';
+    } else {
+      el.textContent = '\u26A0 ' + data.reason;
+      el.className = 'project-validation bad';
+    }
+  } catch (e) {
+    el.textContent = '';  // network blip — stay quiet, server will still validate on submit
+  }
+}
+
+// ---- Directory picker ----
+
+let pickerCurrentPath = null;
+
+async function openPicker() {
+  const el = document.getElementById('pickerOverlay');
+  el.classList.add('open');
+  const seed = (document.getElementById('project').value || '').trim();
+  await loadPickerPath(seed);  // seed-or-home handled by server
+}
+
+function closePicker() {
+  document.getElementById('pickerOverlay').classList.remove('open');
+}
+
+function onPickerBackdropClick(ev) {
+  if (ev.target === ev.currentTarget) closePicker();
+}
+
+async function loadPickerPath(path) {
+  const errEl = document.getElementById('pickerError');
+  const statusEl = document.getElementById('pickerStatus');
+  errEl.textContent = '';
+  statusEl.textContent = 'Loading…';
+  const hidden = document.getElementById('pickerHidden').checked;
+  const url = '/api/browse'
+    + (path ? '?path=' + encodeURIComponent(path) : '?')
+    + '&include_hidden=' + (hidden ? '1' : '0');
+  try {
+    const data = await fetchJSON(url);
+    pickerCurrentPath = data.path;
+    document.getElementById('pickerCurrentPath').textContent = data.path || '/';
+    if (data.error) {
+      errEl.textContent = data.error;
+      document.getElementById('pickerEntries').innerHTML = '';
+      statusEl.textContent = '';
+      return;
+    }
+    renderPickerEntries(data);
+    renderPickerSuggestions(data.suggestions || []);
+    statusEl.textContent = data.truncated
+      ? `${data.entries.length}+ entries (truncated)`
+      : `${data.entries.length} entries`;
+  } catch (e) {
+    errEl.textContent = 'Could not load directory: ' + e.message;
+    statusEl.textContent = '';
+  }
+}
+
+function renderPickerEntries(data) {
+  const container = document.getElementById('pickerEntries');
+  const rows = [];
+  if (data.parent) {
+    rows.push(`
+      <div class="picker-entry parent" onclick="loadPickerPath(${JSON.stringify(data.parent)})">
+        <span class="name">.. (up to ${escapeHtml(data.parent)})</span>
+      </div>
+    `);
+  }
+  for (const entry of data.entries) {
+    const badge = entry.is_project ? '<span class="badge">project</span>' : '';
+    const hiddenTag = entry.is_hidden ? '<span class="hidden-tag">hidden</span>' : '';
+    rows.push(`
+      <div class="picker-entry" onclick="loadPickerPath(${JSON.stringify(entry.path)})"
+           ondblclick="pickEntry(${JSON.stringify(entry.path)})">
+        <span class="name">${escapeHtml(entry.name)}${hiddenTag}</span>
+        ${badge}
+      </div>
+    `);
+  }
+  container.innerHTML = rows.join('') || '<div class="picker-entry parent"><span class="name">(empty)</span></div>';
+}
+
+function renderPickerSuggestions(paths) {
+  const el = document.getElementById('pickerSuggestions');
+  el.innerHTML = paths.map(p => `
+    <button onclick="loadPickerPath(${JSON.stringify(p)})">${escapeHtml(p)}</button>
+  `).join('');
+}
+
+function refreshPicker() {
+  if (pickerCurrentPath) loadPickerPath(pickerCurrentPath);
+}
+
+function pickEntry(path) {
+  document.getElementById('project').value = path;
+  closePicker();
+  runProjectValidation();
+}
+
+function pickCurrentDir() {
+  if (!pickerCurrentPath) return;
+  document.getElementById('project').value = pickerCurrentPath;
+  closePicker();
+  runProjectValidation();
+}
+
+// Fill the project field from the picker and fire launchChain() directly, so
+// the operator can go from picker-open to chain-launched in one interaction.
+// If seed is empty, we still fill the field + close the picker, but flash the
+// seed field instead of alerting — a graceful fallback to the old two-step flow.
+function pickAndLaunch() {
+  if (!pickerCurrentPath) return;
+  document.getElementById('project').value = pickerCurrentPath;
+  closePicker();
+  runProjectValidation();
+  const seedEl = document.getElementById('seed');
+  if (!seedEl.value.trim()) {
+    flashField(seedEl);
+    seedEl.focus();
+    return;
+  }
+  launchChain();
+}
+
+function flashField(el) {
+  if (!el) return;
+  el.classList.remove('field-flash');
+  // Force reflow so re-adding the class restarts the animation.
+  void el.offsetWidth;
+  el.classList.add('field-flash');
+  setTimeout(() => el.classList.remove('field-flash'), 2600);
+}
+
+async function stopChain(chainId) {
+  if (!confirm(`Stop chain ${chainId}?`)) return;
+  try {
+    await fetchJSON(`/api/chains/${chainId}`, {method: 'DELETE'});
+    refreshChains();
+  } catch (e) {
+    alert('Stop failed: ' + e.message);
+  }
+}
+
+function openTmux(session) {
+  alert(`Run in terminal:\n  tmux attach -t ${session}`);
+}
+
+// ---- Detail view ----
+
+async function openDetail(chainId) {
+  openDetailId = chainId;
+  document.getElementById('detailOverlay').classList.add('open');
+  document.getElementById('detailTitle').textContent = chainId;
+  selectDetailTab('log');  // reset to log on every open
+  // First paint from cached record so the panel isn't blank
+  const cached = lastChains.find(c => c.chain_id === chainId);
+  if (cached) renderDetailMeta(cached);
+  await refreshDetail(chainId);
+  startDetailLogSSE(chainId);
+  // Log has its own SSE path (startDetailLogSSE) with scroll-preservation;
+  // plan and bulletin don't, so poll them while the overlay is open.
+  if (detailPollTimer) clearInterval(detailPollTimer);
+  detailPollTimer = setInterval(() => {
+    if (openDetailId === chainId) refreshDetailPlanBulletin(chainId);
+  }, 5000);
+}
+
+function closeDetail() {
+  openDetailId = null;
+  document.getElementById('detailOverlay').classList.remove('open');
+  if (detailPollTimer) { clearInterval(detailPollTimer); detailPollTimer = null; }
+  // Close all per-chain log streams we opened for the detail view
+  for (const id of Object.keys(sseStreams)) {
+    sseStreams[id].close();
+    delete sseStreams[id];
+  }
+}
+
+function onDetailBackdropClick(ev) {
+  // Click on the gray backdrop (not the panel itself) closes the detail view.
+  if (ev.target === ev.currentTarget) closeDetail();
+}
+
+function selectDetailTab(name) {
+  for (const btn of document.querySelectorAll('.detail-tab')) {
+    btn.classList.toggle('active', btn.dataset.pane === name);
+  }
+  for (const pane of document.querySelectorAll('.detail-pane')) {
+    pane.classList.remove('active');
+  }
+  const ids = {log: 'detailPaneLog', plan: 'detailPanePlan', bulletin: 'detailPaneBulletin'};
+  document.getElementById(ids[name]).classList.add('active');
+}
+
+function renderDetailMeta(c) {
+  const status = c.status || 'unknown';
+  const startedAbs = c.started_at_str || (c.started_at ? new Date(c.started_at * 1000).toLocaleString() : '?');
+  const activityAbs = c.last_activity_str || (c.last_activity ? new Date(c.last_activity * 1000).toLocaleString() : '?');
+  const metaEl = document.getElementById('detailMeta');
+  metaEl.innerHTML = `
+    <div>Status: <span class="chain-status ${status}">${status}</span></div>
+    <div>Session: <span title="${escapeHtml(c.session || '?')}">${escapeHtml(c.session || '?')}</span></div>
+    <div>Round: <span>${c.current_round || 0}</span></div>
+    <div>PID: <span>${c.pid || '?'}</span></div>
+    <div>Roles: <span>${escapeHtml(c.role_a || '?')} / ${escapeHtml(c.role_b || '?')}</span></div>
+    <div>Started: <span class="rel-time" title="${escapeHtml(startedAbs)}">${relTime(c.started_at)}</span></div>
+    <div>Activity: <span class="rel-time" title="${escapeHtml(activityAbs)}">${relTime(c.last_activity)}</span></div>
+    <div>Project: <span title="${escapeHtml(c.project || '')}">${escapeHtml(c.project || '(no project)')}</span></div>
+  `;
+  document.getElementById('detailSeed').textContent = c.seed || '(no seed)';
+}
+
+async function refreshDetail(chainId) {
+  try {
+    const data = await fetchJSON(`/api/chains/${chainId}/detail?tail=300`);
+    renderDetailMeta(data.record || {});
+    setPane('detailPaneLog', data.log, '(no log yet)');
+    setPane('detailPanePlan', data.plan,
+      '(agents have not written plan-<chain-id>.md yet)');
+    setPane('detailPaneBulletin', data.bulletin, '(no bulletin yet)');
+    // Auto-scroll log pane to bottom
+    const logPane = document.getElementById('detailPaneLog');
+    logPane.scrollTop = logPane.scrollHeight;
+  } catch (e) {
+    document.getElementById('detailPaneLog').textContent = 'Failed to load: ' + e.message;
+  }
+}
+
+async function refreshDetailPlanBulletin(chainId) {
+  // Polled every 5s while the detail overlay is open. Deliberately skips the
+  // log pane: that's on its own SSE path (startDetailLogSSE) which preserves
+  // scroll position. Plan and bulletin update slowly and are always safe to
+  // replace wholesale.
+  try {
+    const [planResp, bulletinResp] = await Promise.all([
+      fetchJSON(`/api/chains/${chainId}/plan`).catch(() => ({})),
+      fetchJSON(`/api/chains/${chainId}/bulletin`).catch(() => ({})),
+    ]);
+    if (openDetailId !== chainId) return;  // user closed or switched chains
+    setPane('detailPanePlan', planResp.plan,
+      '(agents have not written plan-<chain-id>.md yet)');
+    setPane('detailPaneBulletin', bulletinResp.bulletin, '(no bulletin yet)');
+  } catch (e) {
+    // Transient fetch errors shouldn't fill the console on every tick.
+  }
+}
+
+function setPane(id, text, emptyMessage) {
+  const el = document.getElementById(id);
+  if (text) {
+    el.textContent = text;
+    el.classList.remove('muted');
+  } else {
+    el.textContent = emptyMessage;
+    el.classList.add('muted');
+  }
+}
+
+function startDetailLogSSE(chainId) {
+  if (sseStreams[chainId]) sseStreams[chainId].close();
+  const es = new EventSource(API + `/api/chains/${chainId}/events`);
+  sseStreams[chainId] = es;
+  es.onmessage = async (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'gone') { es.close(); delete sseStreams[chainId]; return; }
+    if (openDetailId !== chainId) return;
+    if (data.log_updated) {
+      const logEl = document.getElementById('detailPaneLog');
+      const wasAtBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 50;
+      try {
+        const d = await fetchJSON(`/api/chains/${chainId}/log?tail=300`);
+        logEl.textContent = d.log || '(empty)';
+        if (wasAtBottom) logEl.scrollTop = logEl.scrollHeight;
+      } catch(err) {}
+    }
+    if (data.type === 'status') renderDetailMeta(data);
+  };
+  es.onerror = () => { es.close(); delete sseStreams[chainId]; };
+}
+
+// ---- List SSE ----
+
+function setLiveIndicator(isLive, hint) {
+  const dot = document.getElementById('liveDot');
+  const txt = document.getElementById('liveText');
+  if (isLive) {
+    dot.classList.remove('stale');
+    txt.textContent = hint || 'live';
+  } else {
+    dot.classList.add('stale');
+    txt.textContent = hint || 'disconnected';
+  }
+}
+
+function startListStream() {
+  if (listStream) listStream.close();
+  listStream = new EventSource(API + '/api/events');
+  listStream.onopen = () => setLiveIndicator(true, 'live');
+  listStream.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.type === 'chains') {
+        lastChains = data.chains;
+        listStreamLastMsg = Date.now();
+        renderChainList();
+        // If a detail view is open, refresh its meta from the new record.
+        if (openDetailId) {
+          const c = lastChains.find(x => x.chain_id === openDetailId);
+          if (c) renderDetailMeta(c);
+        }
+      }
+    } catch (err) { console.error('Bad SSE message:', err); }
+  };
+  listStream.onerror = () => {
+    setLiveIndicator(false, 'reconnecting…');
+    // EventSource auto-reconnects; onopen will clear the indicator.
+  };
+}
+
+// Re-render relative times every 10s so idle chains don't look frozen.
+setInterval(() => {
+  if (lastChains.length) renderChainList();
+}, 10000);
+
+// Init
+loadRoles();
+setViewMode(viewMode);  // apply persisted view toggle state
+refreshChains();        // one-shot fetch so the dashboard isn't blank while SSE connects
+startListStream();
+refreshProjectFocus();  // per-project focus badges
+setInterval(refreshProjectFocus, 15000);  // coordination file changes on heartbeat cadence
+
+// Close overlays with Esc — picker takes precedence over detail.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('pickerOverlay').classList.contains('open')) {
+    closePicker();
+    return;
+  }
+  if (openDetailId) closeDetail();
+});
+</script>
+</body>
+</html>

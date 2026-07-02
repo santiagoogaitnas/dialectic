@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+*.pyo
+.coverage
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# macOS
+.DS_Store
+
+# Runtime artifacts
+chainwork/
+.env
+.venv/
+
+# Chain project-mode artifacts
+.dialectic-a*/
+.dialectic-b*/
+# Project-level coordination state (project_coordinator writes <project>/.dialectic/).
+# If a chain is ever mis-pointed at this repo, this keeps the stray
+# coordination.json out of the commit rather than into it.
+.dialectic/
+plan-*.md
