@@ -16,7 +16,7 @@ The value, concretely:
 
 ## Requirements
 
-- macOS or Linux
+- macOS or Linux (Windows works via WSL2 — see FAQ)
 - Python 3.10+ (standard library only — no packages to install)
 - [tmux](https://github.com/tmux/tmux)
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code), installed and authenticated (`claude` must work in your terminal)
@@ -134,6 +134,9 @@ Dialectic detects when an agent is done responding by watching Claude Code's ter
 
 **Does it work with the API instead of a subscription?**
 It shells out to the `claude` CLI for everything. Any auth that makes `claude` work in your terminal works here.
+
+**Does it work on Windows?**
+Not natively — it depends on tmux and Unix file locking. It runs fine inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/): install tmux and Claude Code in the WSL environment, and keep your project directory inside the WSL filesystem (e.g. under `~/`) rather than on `/mnt/c`, where file locking is unreliable.
 
 **How do I run the tests?**
 `python3 -m pytest tests/` — no setup beyond pytest. `tests/test_smoke.py` makes a few real `claude` CLI calls to validate assumptions, so it needs an authenticated CLI; skip it with `--ignore=tests/test_smoke.py` if you don't want that.
