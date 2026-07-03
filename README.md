@@ -1,18 +1,29 @@
 # Dialectic
 
+[![Release](https://img.shields.io/github/v/release/santiagoogaitnas/dialectic)](https://github.com/santiagoogaitnas/dialectic/releases/latest)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen)
+[![License: MIT](https://img.shields.io/github/license/santiagoogaitnas/dialectic)](LICENSE)
+
 Two Claude Code agents working on your project in a continuous back-and-forth loop that can run indefinitely. A third process (the curator) periodically distills their conversation into a dense recap and restarts them from it, so the agents never hit the context wall and never degrade.
+
+<!-- DEMO SLOT — replace this comment with the screencast when recorded.
+     Suggested scene (~30s): run `python3 chain.py "..." --project ...`, show the
+     launch card, then `tmux attach` with both agents talking side by side, then
+     the dashboard at localhost:8420. Record with `vhs` or asciinema→gif, keep it
+     under ~10 MB, commit it to assets/demo.gif, then embed here:
+     ![Two agents in a Dialectic chain](assets/demo.gif)
+-->
+
+- **Long unattended work sessions.** Chains run until you stop them. Context resets are automatic, so round 40 is as sharp as round 4.
+- **Two perspectives instead of one.** Each agent's output is challenged by a counterpart with a different role, which catches drift and bad ideas earlier than a single agent working alone.
+- **Everything on disk.** The full conversation log, the curator's recaps, and the agents' plan file survive crashes and restarts. You can stop a chain and relaunch it, and the agents pick up from the files they left behind.
 
 ## What it does
 
 You point Dialectic at a project directory and give it a starting instruction. It opens a tmux session with two Claude Code agents in it — by default a pragmatic builder and a pattern thinker — and relays each agent's response to the other. Both agents have full tool access inside your project: they read code, write code, run tests, and keep a shared plan file up to date.
 
 The problem with long agent sessions is that context fills up and quality drops. Dialectic's answer is the curator: every 5 rounds, a separate Claude process reads both transcripts, writes a dense recap for each agent, clears both sessions, and injects the recaps. The agents resume with fresh context and keep going. The loop only ends when you stop it.
-
-The value, concretely:
-
-- **Long unattended work sessions.** Chains run until you stop them. Context resets are automatic, so round 40 is as sharp as round 4.
-- **Two perspectives instead of one.** Each agent's output is challenged by a counterpart with a different role, which catches drift and bad ideas earlier than a single agent working alone.
-- **Everything on disk.** The full conversation log, the curator's recaps, and the agents' plan file survive crashes and restarts. You can stop a chain and relaunch it, and the agents pick up from the files they left behind.
 
 ## Requirements
 
