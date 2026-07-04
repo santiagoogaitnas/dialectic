@@ -317,14 +317,9 @@ def _write_pane_claude_md(pane_dir: Path, role_prompt: str, cfg: "reg.ChainConfi
                 )
             )
     sections.append(
-        "This terminal is driven by an automated relay -- no human is "
-        "watching it. The relay reads this screen to know when you are "
-        "done, so never use anything that waits for a person or takes "
-        "over the display: no interactive question prompts (if you are "
-        "unsure about something, state your assumption and keep going), "
-        "and no team-create / multi-terminal modes that reformat this "
-        "window. A display takeover or a prompt waiting for input "
-        "stalls the entire chain."
+        "Never open an interactive question prompt -- if something is "
+        "unclear, state your assumption and continue. Never use "
+        "team-create or multi-terminal display modes."
     )
     claude_md = pane_dir / "CLAUDE.md"
     claude_md.write_text("\n\n".join(sections) + "\n", encoding="utf-8")

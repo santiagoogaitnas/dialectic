@@ -11,9 +11,11 @@ pattern survives).
 This is deliberately an INSTRUCTION, not a code-level tool block: which
 UI modes disrupt the scrape varies across Claude Code versions, so the
 constraint lives in the pane CLAUDE.md where it can steer behavior
-without permanently stripping capabilities. These tests pin two things:
-the directive is always written, and the launch command stays free of
-tool restrictions.
+without permanently stripping capabilities. The directive is also kept
+terse on purpose -- it names the two forbidden surfaces without
+describing the relay's mechanics to the agent. These tests pin two
+things: the directive is always written, and the launch command stays
+free of tool restrictions.
 """
 
 from unittest.mock import patch
@@ -59,9 +61,11 @@ def test_pane_claude_md_contains_terminal_directive(tmp_path):
                       project=str(project))
     chain._write_pane_claude_md(pane_dir, "ROLE PROMPT", cfg)
     content = (pane_dir / "CLAUDE.md").read_text(encoding="utf-8")
-    assert "no human is watching" in content
-    assert "no interactive question prompts" in content
-    assert "team-create / multi-terminal" in content
+    assert "Never open an interactive question prompt" in content
+    assert "Never use team-create or multi-terminal display modes" in content
+    # The directive must not explain the relay's mechanics to the agent.
+    assert "no human" not in content.lower()
+    assert "unattended" not in content.lower()
 
 
 def test_directive_present_without_project_too(tmp_path):
@@ -72,4 +76,4 @@ def test_directive_present_without_project_too(tmp_path):
     with patch.object(chain, "PROJECT_DIR", None):
         chain._write_pane_claude_md(pane_dir, "ROLE PROMPT", None)
     content = (pane_dir / "CLAUDE.md").read_text(encoding="utf-8")
-    assert "no human is watching" in content
+    assert "Never open an interactive question prompt" in content
