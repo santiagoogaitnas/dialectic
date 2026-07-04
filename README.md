@@ -149,7 +149,7 @@ Only Ctrl+C (or killing the tmux session) stops a chain. Empty responses, identi
 Chains are ordinary Claude Code sessions running under your existing authentication, so usage is billed however your Claude Code usage is billed (subscription plan or API key). Note that a chain left running generates continuous usage — two agents plus periodic curator calls.
 
 **Is it safe to point at my code?**
-The agents run with `--dangerously-skip-permissions`: they execute commands and edit files without asking. Only point a chain at a project you're comfortable letting an agent modify, keep the project in git so you can review and revert, and don't point it at directories with credentials or irreplaceable data.
+The agents run with `--dangerously-skip-permissions`: they execute commands and edit files without asking. Only point a chain at a project you're comfortable letting an agent modify, keep the project in git so you can review and revert, and don't point it at directories with credentials or irreplaceable data. Launching is treated as consent: at launch Dialectic pre-accepts Claude Code's one-time folder-trust prompt for the target project and its bypass-mode acceptance, written directly into Claude Code's own config (`~/.claude.json`), so the unattended panes never sit on a dialog. It also removes the per-chain entries Claude Code leaves in that file once chains end.
 
 **How do I stop everything?**
 `python3 chain.py --stop <chain-id>`, or Ctrl+C in the terminal that launched the chain. The tmux session is left alive after Ctrl+C so you can inspect the agents; kill it with `tmux kill-session -t chain-<chain-id>`.
@@ -158,7 +158,7 @@ The agents run with `--dangerously-skip-permissions`: they execute commands and 
 No. The agents' output is ordinary files in your project, and their plan file survives. Launch a new chain with the same command and the agents read what's already there and continue.
 
 **The agents never started on my very first run.**
-Attach to the tmux session (the launch output prints the exact command) and look at the panes. The first time Claude Code runs in `--dangerously-skip-permissions` mode on a machine, it shows a one-time acceptance prompt that blocks the agents from booting. Accept it in the pane, stop the chain, and relaunch — every run after that is clean. (Missing `tmux` or `claude` binaries are caught before launch with a clear error.)
+This shouldn't happen: at launch Dialectic pre-accepts Claude Code's one-time prompts (the "do you trust the files in this folder?" dialog and the `--dangerously-skip-permissions` acceptance) before the agents boot. If a pane still sits on an interactive prompt — most likely a Claude Code update changed how that acceptance is stored — attach to the tmux session (the launch output prints the exact command), accept the prompt in each pane, relaunch, and please open an issue. (Missing `tmux` or `claude` binaries are caught before launch with a clear error.)
 
 **The loop stopped advancing but the agents look fine.**
 Dialectic detects when an agent is done responding by watching Claude Code's terminal UI, and that UI changes between Claude Code versions. If idle detection breaks after a Claude Code update, that's the most likely cause — check `chainwork/<chain-id>/chain_log.md` to see where it stalled, and open an issue.

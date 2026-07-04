@@ -16,6 +16,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
+import claude_config
+
 logger = logging.getLogger("registry")
 
 REPO_DIR = Path(__file__).parent.resolve()
@@ -193,6 +195,14 @@ def unregister_chain(chain_id: str) -> None:
         data["chains"][chain_id]["status"] = "stopped"
         data["chains"][chain_id]["stopped_at"] = time.time()
         _write_registry(data)
+        # The chain's pane scratch dirs are never reused; drop the
+        # entries claude recorded for them in its own config so the
+        # file doesn't grow two dead entries per launch. Every
+        # end-of-life path funnels through here (Ctrl+C via run_chain's
+        # finally, --stop / UI stop via stop_chain, failed boots).
+        project = data["chains"][chain_id].get("project")
+        if project:
+            claude_config.remove_chain_scratch_entries(project, chain_id)
 
 
 @_with_lock

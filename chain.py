@@ -43,6 +43,7 @@ from janitor.jsonl_reader import (
     discover_jsonl_for_pane,
     read_new_entries,
 )
+import claude_config
 import registry as reg
 from chain_coordinator import ChainCoordinatorContext
 import coordination_prompt
@@ -859,126 +860,123 @@ def run_chain(seed: str, prompt_a: str = PROMPT_A, prompt_b: str = PROMPT_B,
     if cfg:
         record = reg.register_chain(cfg, os.getpid())
 
-    logger.info("Setting up workspace...")
-    setup_workspace(cfg)
-
-    logger.info("Creating tmux session...")
-    setup_tmux(cfg)
-
-    dir_a, dir_b = _project_pane_dirs(cfg)
-    _write_pane_claude_md(dir_a, prompt_a, cfg, focus=focus)
-    _write_pane_claude_md(dir_b, prompt_b, cfg, focus=focus)
-
-    logger.info("Starting Agent A (builder)...")
-    start_agent(0, "builder", cfg)
-    time.sleep(5)
-
-    logger.info("Starting Agent B (thinker)...")
-    start_agent(1, "thinker", cfg)
-
-    logger.info("Waiting for agents to boot...")
-    time.sleep(15)
-
-    if not wait_for_idle(pane_a, timeout=60):
-        logger.error(
-            f"Agent A didn't start. Check: tmux attach -t {session} — the pane "
-            "may be showing Claude Code's one-time permissions prompt; accept "
-            "it there and relaunch."
-        )
-        if record:
-            reg.unregister_chain(cfg.chain_id)
-        return
-    if not wait_for_idle(pane_b, timeout=60):
-        logger.error(
-            f"Agent B didn't start. Check: tmux attach -t {session} — the pane "
-            "may be showing Claude Code's one-time permissions prompt; accept "
-            "it there and relaunch."
-        )
-        if record:
-            reg.unregister_chain(cfg.chain_id)
-        return
-
-    logger.info("Both agents ready.")
-
-    logger.info("[Round 1] Sending seed to Agent A...")
-    if not inject_message(pane_a, seed):
-        logger.error("Failed to inject seed")
-        return
-
-    if not wait_for_idle(pane_a):
-        logger.error("Agent A timed out on seed")
-        return
-
-    cursor_a = discover_jsonl_with_retries(pane_a, _project_pane_dirs(cfg)[0])
-    if not cursor_a:
-        logger.error("Can't find JSONL for Agent A")
-        return
-    logger.info(f"Agent A JSONL: {cursor_a.file_path.name}")
-
-    a_output = wait_and_extract(cursor_a, pane_target=pane_a)
-    if not a_output:
-        logger.error("No output from Agent A on seed")
-        return
-
-    with open(log_file, "w") as f:
-        f.write("# Interpretation Chain\n\n")
-        if cfg:
-            f.write(f"**Chain ID:** {cfg.chain_id}\n\n")
-            if cfg.project:
-                f.write(f"**Project:** {cfg.project}\n\n")
-        f.write(f"**Seed:** {seed}\n\n")
-        f.write(f"**Reset every:** {clear_every} rounds\n\n")
-        f.write("**Agent A (Builder):** Pragmatic, grounds in action\n\n")
-        f.write("**Agent B (Thinker):** Patterns, connections, deeper structures\n\n")
-        f.write("---\n")
-        f.write(f"\n## Round 1 -- Builder\n\n{a_output}\n\n---\n")
-    logger.info(f"[Round 1] Agent A: {len(a_output)} chars")
-
-    if record:
-        reg.update_chain(cfg.chain_id, current_round=1,
-                         last_output_snippet=a_output[:200])
-
-    logger.info("[Round 1] -> Agent B")
-    if not inject_message(pane_b, a_output):
-        logger.error("Failed to inject into Agent B")
-        return
-
-    if not wait_for_idle(pane_b):
-        logger.error("Agent B timed out")
-        return
-
-    cursor_b = discover_jsonl_with_retries(pane_b, _project_pane_dirs(cfg)[1])
-    if not cursor_b:
-        logger.error("Can't find JSONL for Agent B")
-        return
-    logger.info(f"Agent B JSONL: {cursor_b.file_path.name}")
-
-    if cursor_a.file_path == cursor_b.file_path:
-        logger.error(
-            f"JSONL COLLISION: both agents resolved to {cursor_a.file_path}. "
-            "Dialogue would collapse to monologue. Aborting."
-        )
-        return
-
-    b_output = wait_and_extract(cursor_b, pane_target=pane_b)
-    if not b_output:
-        logger.error("No output from Agent B")
-        return
-
-    with open(log_file, "a") as f:
-        f.write(f"\n## Round 1 -- Thinker\n\n{b_output}\n\n---\n")
-    logger.info(f"[Round 1] Agent B: {len(b_output)} chars")
-
-    current = b_output
-    i = 1
-    rounds_since_reset = 1
-    last_recap_a: str | None = None
-    last_recap_b: str | None = None
-
-    coord_project = cfg.project if (cfg and cfg.project) else None
-    coord_chain_id = cfg.chain_id if cfg else ""
-
+    i = 0  # rounds completed; the KeyboardInterrupt handler below reports it
     try:
+        logger.info("Setting up workspace...")
+        setup_workspace(cfg)
+
+        logger.info("Creating tmux session...")
+        setup_tmux(cfg)
+
+        dir_a, dir_b = _project_pane_dirs(cfg)
+        _write_pane_claude_md(dir_a, prompt_a, cfg, focus=focus)
+        _write_pane_claude_md(dir_b, prompt_b, cfg, focus=focus)
+
+        logger.info("Starting Agent A (builder)...")
+        start_agent(0, "builder", cfg)
+        time.sleep(5)
+
+        logger.info("Starting Agent B (thinker)...")
+        start_agent(1, "thinker", cfg)
+
+        logger.info("Waiting for agents to boot...")
+        time.sleep(15)
+
+        if not wait_for_idle(pane_a, timeout=60):
+            logger.error(
+                f"Agent A didn't start. Check: tmux attach -t {session} — the pane "
+                "may be showing Claude Code's one-time permissions prompt; accept "
+                "it there and relaunch."
+            )
+            return
+        if not wait_for_idle(pane_b, timeout=60):
+            logger.error(
+                f"Agent B didn't start. Check: tmux attach -t {session} — the pane "
+                "may be showing Claude Code's one-time permissions prompt; accept "
+                "it there and relaunch."
+            )
+            return
+
+        logger.info("Both agents ready.")
+
+        logger.info("[Round 1] Sending seed to Agent A...")
+        if not inject_message(pane_a, seed):
+            logger.error("Failed to inject seed")
+            return
+
+        if not wait_for_idle(pane_a):
+            logger.error("Agent A timed out on seed")
+            return
+
+        cursor_a = discover_jsonl_with_retries(pane_a, _project_pane_dirs(cfg)[0])
+        if not cursor_a:
+            logger.error("Can't find JSONL for Agent A")
+            return
+        logger.info(f"Agent A JSONL: {cursor_a.file_path.name}")
+
+        a_output = wait_and_extract(cursor_a, pane_target=pane_a)
+        if not a_output:
+            logger.error("No output from Agent A on seed")
+            return
+
+        with open(log_file, "w") as f:
+            f.write("# Interpretation Chain\n\n")
+            if cfg:
+                f.write(f"**Chain ID:** {cfg.chain_id}\n\n")
+                if cfg.project:
+                    f.write(f"**Project:** {cfg.project}\n\n")
+            f.write(f"**Seed:** {seed}\n\n")
+            f.write(f"**Reset every:** {clear_every} rounds\n\n")
+            f.write("**Agent A (Builder):** Pragmatic, grounds in action\n\n")
+            f.write("**Agent B (Thinker):** Patterns, connections, deeper structures\n\n")
+            f.write("---\n")
+            f.write(f"\n## Round 1 -- Builder\n\n{a_output}\n\n---\n")
+        logger.info(f"[Round 1] Agent A: {len(a_output)} chars")
+
+        if record:
+            reg.update_chain(cfg.chain_id, current_round=1,
+                             last_output_snippet=a_output[:200])
+
+        logger.info("[Round 1] -> Agent B")
+        if not inject_message(pane_b, a_output):
+            logger.error("Failed to inject into Agent B")
+            return
+
+        if not wait_for_idle(pane_b):
+            logger.error("Agent B timed out")
+            return
+
+        cursor_b = discover_jsonl_with_retries(pane_b, _project_pane_dirs(cfg)[1])
+        if not cursor_b:
+            logger.error("Can't find JSONL for Agent B")
+            return
+        logger.info(f"Agent B JSONL: {cursor_b.file_path.name}")
+
+        if cursor_a.file_path == cursor_b.file_path:
+            logger.error(
+                f"JSONL COLLISION: both agents resolved to {cursor_a.file_path}. "
+                "Dialogue would collapse to monologue. Aborting."
+            )
+            return
+
+        b_output = wait_and_extract(cursor_b, pane_target=pane_b)
+        if not b_output:
+            logger.error("No output from Agent B")
+            return
+
+        with open(log_file, "a") as f:
+            f.write(f"\n## Round 1 -- Thinker\n\n{b_output}\n\n---\n")
+        logger.info(f"[Round 1] Agent B: {len(b_output)} chars")
+
+        current = b_output
+        i = 1
+        rounds_since_reset = 1
+        last_recap_a: str | None = None
+        last_recap_b: str | None = None
+
+        coord_project = cfg.project if (cfg and cfg.project) else None
+        coord_chain_id = cfg.chain_id if cfg else ""
+
         with ChainCoordinatorContext(
             project_dir=coord_project,
             chain_id=coord_chain_id,
@@ -1267,6 +1265,27 @@ if __name__ == "__main__":
         sys.exit(1)
 
     _preflight_binaries()
+
+    # Pre-answer Claude Code's one-time dialogs (folder trust for the
+    # project root, bypass-permissions acceptance) before any pane
+    # boots -- the relay drives the panes blind, so a first-run dialog
+    # nobody can click through would stall the chain forever. The same
+    # write sweeps out scratch-dir entries left behind by chains that
+    # are no longer live ("resetting" counts as live: those panes are
+    # mid-curator-reset, not finished).
+    _live_ids = {
+        c.chain_id
+        for c in reg.list_chains()
+        if c.project == project_str and c.status in ("running", "resetting")
+    }
+    if not claude_config.seed_first_run_keys(project_path,
+                                             active_chain_ids=_live_ids):
+        logger.warning(
+            "Couldn't pre-accept Claude Code's first-run prompts in "
+            f"{claude_config.config_path()}. If the agents never start, "
+            "attach to the tmux session, accept the prompt shown in each "
+            "pane, and relaunch."
+        )
 
     chain_id = reg.generate_chain_id()
     session_name = args.session or f"chain-{chain_id}"
