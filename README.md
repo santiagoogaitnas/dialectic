@@ -163,6 +163,9 @@ This shouldn't happen: at launch Dialectic pre-accepts Claude Code's one-time pr
 **The loop stopped advancing but the agents look fine.**
 Dialectic detects when an agent is done responding by watching Claude Code's terminal UI, and that UI changes between Claude Code versions. If idle detection breaks after a Claude Code update, that's the most likely cause — check `chainwork/<chain-id>/chain_log.md` to see where it stalled, and open an issue.
 
+**What stops an agent from opening an interactive prompt nobody can answer?**
+Each agent is told up front that its terminal is driven by an automated relay with no human watching: don't open interactive question prompts (state assumptions and keep going), and don't enter team/multi-terminal modes that take over the display, because the relay reads the screen and a takeover stalls the chain. This is an instruction rather than a hard block, so if a chain ever does stall this way, attach to the tmux session to see what the pane is showing, nudge it past, and open an issue.
+
 **Does it work with the API instead of a subscription?**
 It shells out to the `claude` CLI for everything. Any auth that makes `claude` work in your terminal works here.
 
