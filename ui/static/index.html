@@ -1156,8 +1156,49 @@ async function runProjectValidation() {
 // ---- Directory picker ----
 
 let pickerCurrentPath = null;
+// Current listing, indexed by the data-idx we stamp on each row, plus the
+// parent path. Rows carry only an integer index — never the path itself —
+// so a directory name containing a quote, backslash, or other markup-breaking
+// character can't corrupt the handler wiring (the bug that made every entry
+// unclickable when paths were interpolated into inline onclick attributes).
+let pickerEntries = [];
+let pickerParentPath = null;
+let pickerSuggestionPaths = [];
+let _pickerDelegationReady = false;
+
+function ensurePickerDelegation() {
+  if (_pickerDelegationReady) return;
+  const entriesEl = document.getElementById('pickerEntries');
+  // Single click navigates into the row's directory (".." goes up). Selection
+  // is the "Use this folder" / "Use & Launch" buttons, which act on whatever
+  // directory you've navigated into — so there's no racy click-vs-dblclick.
+  entriesEl.addEventListener('click', (ev) => {
+    const row = ev.target.closest('.picker-entry');
+    if (!row) return;
+    const path = _pickerEntryPath(row);
+    if (path != null) loadPickerPath(path);
+  });
+  const suggEl = document.getElementById('pickerSuggestions');
+  suggEl.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button[data-sidx]');
+    if (!btn) return;
+    const p = pickerSuggestionPaths[+btn.dataset.sidx];
+    if (p != null) loadPickerPath(p);
+  });
+  _pickerDelegationReady = true;
+}
+
+function _pickerEntryPath(row) {
+  if (row.dataset.nav === 'parent') return pickerParentPath;
+  if (row.dataset.idx !== undefined) {
+    const entry = pickerEntries[+row.dataset.idx];
+    return entry ? entry.path : null;
+  }
+  return null;
+}
 
 async function openPicker() {
+  ensurePickerDelegation();
   const el = document.getElementById('pickerOverlay');
   el.classList.add('open');
   const seed = (document.getElementById('project').value || '').trim();
@@ -1204,43 +1245,39 @@ async function loadPickerPath(path) {
 
 function renderPickerEntries(data) {
   const container = document.getElementById('pickerEntries');
+  pickerEntries = data.entries || [];
+  pickerParentPath = data.parent || null;
   const rows = [];
   if (data.parent) {
     rows.push(`
-      <div class="picker-entry parent" onclick="loadPickerPath(${JSON.stringify(data.parent)})">
+      <div class="picker-entry parent" data-nav="parent">
         <span class="name">.. (up to ${escapeHtml(data.parent)})</span>
       </div>
     `);
   }
-  for (const entry of data.entries) {
+  pickerEntries.forEach((entry, i) => {
     const badge = entry.is_project ? '<span class="badge">project</span>' : '';
     const hiddenTag = entry.is_hidden ? '<span class="hidden-tag">hidden</span>' : '';
     rows.push(`
-      <div class="picker-entry" onclick="loadPickerPath(${JSON.stringify(entry.path)})"
-           ondblclick="pickEntry(${JSON.stringify(entry.path)})">
+      <div class="picker-entry" data-idx="${i}">
         <span class="name">${escapeHtml(entry.name)}${hiddenTag}</span>
         ${badge}
       </div>
     `);
-  }
+  });
   container.innerHTML = rows.join('') || '<div class="picker-entry parent"><span class="name">(empty)</span></div>';
 }
 
 function renderPickerSuggestions(paths) {
   const el = document.getElementById('pickerSuggestions');
-  el.innerHTML = paths.map(p => `
-    <button onclick="loadPickerPath(${JSON.stringify(p)})">${escapeHtml(p)}</button>
+  pickerSuggestionPaths = paths || [];
+  el.innerHTML = pickerSuggestionPaths.map((p, i) => `
+    <button data-sidx="${i}">${escapeHtml(p)}</button>
   `).join('');
 }
 
 function refreshPicker() {
   if (pickerCurrentPath) loadPickerPath(pickerCurrentPath);
-}
-
-function pickEntry(path) {
-  document.getElementById('project').value = path;
-  closePicker();
-  runProjectValidation();
 }
 
 function pickCurrentDir() {
