@@ -85,6 +85,8 @@ python3 -m ui.server        # http://localhost:8420
 
 Launch, monitor, and stop chains from the browser. Chains are grouped by project and update live. Each chain card opens a detail view with the streaming log, the plan file, and the curator's long-term notes. No dependencies — it runs on the Python standard library.
 
+The server binds to `127.0.0.1` by default, so the dashboard is reachable only from your own machine. Pass `--host 0.0.0.0` to deliberately expose it to your local network — its launch endpoint starts permission-skipping agents, so anyone who can reach the page can point agents at your files. Treat network exposure as an explicit opt-in.
+
 ## Roles
 
 Each chain runs two roles, one per agent. Defaults are `builder.txt` and `thinker.txt`. Swap either:
