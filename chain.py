@@ -74,6 +74,27 @@ def load_role(filename: str) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+def role_label(role_filename: str) -> str:
+    """Human label for a role, derived from its filename.
+
+    ``builder.txt`` -> ``Builder``, ``architect.txt`` -> ``Architect``,
+    ``research-director.txt`` -> ``Research Director``. Used for the
+    curator's recap label, the bulletin's per-agent dialogue headers, and
+    the transcript headers, so a chain launched with ANY --role-a/--role-b
+    (including role files added after this code was written) is described
+    by its actual role everywhere — not the hardcoded builder/thinker pair.
+
+    The default pairing is deliberately label-stable: ``builder.txt`` and
+    ``thinker.txt`` yield ``Builder`` and ``Thinker``, which uppercase to
+    the same ``BUILDER``/``THINKER`` dialogue headers and match the same
+    transcript headers the engine emitted before roles were threaded
+    through.
+    """
+    stem = Path(role_filename).stem
+    cleaned = stem.replace("-", " ").replace("_", " ").strip()
+    return cleaned.title() if cleaned else "Agent"
+
+
 def _reject_project_inside_repo(project_path: Path) -> None:
     """Refuse to launch a chain pointed at this dialectic repo itself.
 
@@ -121,7 +142,9 @@ PROMPT_B = load_role("thinker.txt")
 
 JANITOR_SYSTEM_PROMPT = """\
 You are a conversation curator. You are reading the full transcript of a \
-dialogue between two thinkers -- a pragmatic builder and a pattern thinker.
+dialogue between two thinkers, each playing a distinct role. The \
+"AGENT ROLE" line in the material below names the role of the thinker this \
+recap is for; honor it rather than assuming any fixed pairing.
 
 Your job: produce a RECAP that lets this thinker restart the conversation \
 from a clean context without losing anything important. This recap will be \
@@ -649,12 +672,13 @@ def _parse_bulletin(raw: str) -> str:
 
 def update_bulletin(
     dialogue_a: str, dialogue_b: str, previous_bulletin: str | None = None,
+    label_a: str = "Builder", label_b: str = "Thinker",
 ) -> str | None:
     parts = []
     if previous_bulletin:
         parts.append(f"YOUR PREVIOUS BULLETIN:\n{previous_bulletin}")
-    parts.append(f"BUILDER DIALOGUE (since last reset):\n{dialogue_a}")
-    parts.append(f"THINKER DIALOGUE (since last reset):\n{dialogue_b}")
+    parts.append(f"{label_a.upper()} DIALOGUE (since last reset):\n{dialogue_a}")
+    parts.append(f"{label_b.upper()} DIALOGUE (since last reset):\n{dialogue_b}")
     prompt = "\n\n".join(parts)
 
     logger.info(f"  Updating bulletin ({len(prompt)} chars input)...")
@@ -686,6 +710,8 @@ def clear_and_recap(
     previous_recap_b: str | None = None,
     bulletin_path: Path | None = None,
     cfg: "reg.ChainConfig | None" = None,
+    label_a: str = "Builder",
+    label_b: str = "Thinker",
 ):
     logger.info(f"[Round {round_num}] === CONTEXT RESET ===")
 
@@ -696,13 +722,16 @@ def clear_and_recap(
         prev_bulletin = None
         if bulletin_path.exists():
             prev_bulletin = bulletin_path.read_text(encoding="utf-8").strip() or None
-        current_bulletin = update_bulletin(dialogue_a, dialogue_b, prev_bulletin)
+        current_bulletin = update_bulletin(
+            dialogue_a, dialogue_b, prev_bulletin,
+            label_a=label_a, label_b=label_b,
+        )
         if current_bulletin:
             bulletin_path.write_text(current_bulletin + "\n", encoding="utf-8")
             logger.info(f"  Bulletin written to {bulletin_path}")
 
-    recap_a = get_recap(cursor_a.file_path, "Builder (pragmatic)", previous_recap_a, bulletin=current_bulletin)
-    recap_b = get_recap(cursor_b.file_path, "Thinker (patterns)", previous_recap_b, bulletin=current_bulletin)
+    recap_a = get_recap(cursor_a.file_path, label_a, previous_recap_a, bulletin=current_bulletin)
+    recap_b = get_recap(cursor_b.file_path, label_b, previous_recap_b, bulletin=current_bulletin)
 
     if not recap_a or not recap_b:
         logger.error("Failed to generate recaps, skipping reset")
@@ -712,8 +741,8 @@ def clear_and_recap(
         f.write(f"\n## Round {round_num} -- CONTEXT RESET\n\n")
         if bulletin_path and bulletin_path.exists():
             f.write(f"### Curator bulletin\n\n{bulletin_path.read_text(encoding='utf-8').strip()}\n\n")
-        f.write(f"### Builder recap\n\n{recap_a}\n\n")
-        f.write(f"### Thinker recap\n\n{recap_b}\n\n---\n")
+        f.write(f"### {label_a} recap\n\n{recap_a}\n\n")
+        f.write(f"### {label_b} recap\n\n{recap_b}\n\n---\n")
 
     logger.info("  Clearing both agents...")
     subprocess.run(["tmux", "send-keys", "-t", pane_a, "/clear", "C-m"], check=False, timeout=5)
@@ -747,7 +776,7 @@ def clear_and_recap(
         return None, None, None, None, None, None
 
     with open(log_file, "a") as f:
-        f.write(f"\n## Round {round_num} -- Builder (post-reset)\n\n{a_output}\n\n---\n")
+        f.write(f"\n## Round {round_num} -- {label_a} (post-reset)\n\n{a_output}\n\n---\n")
     logger.info(f"  Agent A post-reset: {len(a_output)} chars")
 
     logger.info("  Injecting recap into Agent B...")
@@ -777,7 +806,7 @@ def clear_and_recap(
         return None, None, None, None, None, None
 
     with open(log_file, "a") as f:
-        f.write(f"\n## Round {round_num} -- Thinker (post-reset)\n\n{b_output}\n\n---\n")
+        f.write(f"\n## Round {round_num} -- {label_b} (post-reset)\n\n{b_output}\n\n---\n")
     logger.info(f"  Agent B post-reset: {len(b_output)} chars")
     logger.info(f"  === RESET COMPLETE ===")
 
@@ -853,6 +882,8 @@ def run_chain(seed: str, prompt_a: str = PROMPT_A, prompt_b: str = PROMPT_B,
         bulletin_path = cfg.bulletin_path
         session = cfg.session
         clear_every = CLEAR_EVERY
+        role_file_a = cfg.role_a
+        role_file_b = cfg.role_b
     else:
         pane_a = f"{SESSION}:0.0"
         pane_b = f"{SESSION}:0.1"
@@ -860,6 +891,18 @@ def run_chain(seed: str, prompt_a: str = PROMPT_A, prompt_b: str = PROMPT_B,
         bulletin_path = WORKSPACE / SESSION / "bulletin.md"
         session = SESSION
         clear_every = CLEAR_EVERY
+        role_file_a = "builder.txt"
+        role_file_b = "thinker.txt"
+
+    # Labels derived from the actual role files drive every place an agent is
+    # named: the curator's recap label and bulletin headers, the transcript
+    # headers, and the tmux pane names. Threading these through is what makes a
+    # non-default pairing (e.g. architect + contrarian) get recapped and logged
+    # as itself instead of silently as "builder"/"thinker".
+    label_a = role_label(role_file_a)
+    label_b = role_label(role_file_b)
+    pane_name_a = Path(role_file_a).stem or "agent-a"
+    pane_name_b = Path(role_file_b).stem or "agent-b"
 
     record = None
     if cfg:
@@ -877,12 +920,12 @@ def run_chain(seed: str, prompt_a: str = PROMPT_A, prompt_b: str = PROMPT_B,
         _write_pane_claude_md(dir_a, prompt_a, cfg, focus=focus)
         _write_pane_claude_md(dir_b, prompt_b, cfg, focus=focus)
 
-        logger.info("Starting Agent A (builder)...")
-        start_agent(0, "builder", cfg)
+        logger.info(f"Starting Agent A ({pane_name_a})...")
+        start_agent(0, pane_name_a, cfg)
         time.sleep(5)
 
-        logger.info("Starting Agent B (thinker)...")
-        start_agent(1, "thinker", cfg)
+        logger.info(f"Starting Agent B ({pane_name_b})...")
+        start_agent(1, pane_name_b, cfg)
 
         logger.info("Waiting for agents to boot...")
         time.sleep(15)
@@ -932,10 +975,10 @@ def run_chain(seed: str, prompt_a: str = PROMPT_A, prompt_b: str = PROMPT_B,
                     f.write(f"**Project:** {cfg.project}\n\n")
             f.write(f"**Seed:** {seed}\n\n")
             f.write(f"**Reset every:** {clear_every} rounds\n\n")
-            f.write("**Agent A (Builder):** Pragmatic, grounds in action\n\n")
-            f.write("**Agent B (Thinker):** Patterns, connections, deeper structures\n\n")
+            f.write(f"**Agent A ({label_a}):** role `{role_file_a}`\n\n")
+            f.write(f"**Agent B ({label_b}):** role `{role_file_b}`\n\n")
             f.write("---\n")
-            f.write(f"\n## Round 1 -- Builder\n\n{a_output}\n\n---\n")
+            f.write(f"\n## Round 1 -- {label_a}\n\n{a_output}\n\n---\n")
         logger.info(f"[Round 1] Agent A: {len(a_output)} chars")
 
         if record:
@@ -970,7 +1013,7 @@ def run_chain(seed: str, prompt_a: str = PROMPT_A, prompt_b: str = PROMPT_B,
             return
 
         with open(log_file, "a") as f:
-            f.write(f"\n## Round 1 -- Thinker\n\n{b_output}\n\n---\n")
+            f.write(f"\n## Round 1 -- {label_b}\n\n{b_output}\n\n---\n")
         logger.info(f"[Round 1] Agent B: {len(b_output)} chars")
 
         current = b_output
@@ -1009,6 +1052,8 @@ def run_chain(seed: str, prompt_a: str = PROMPT_A, prompt_b: str = PROMPT_B,
                         previous_recap_b=last_recap_b,
                         bulletin_path=bulletin_path,
                         cfg=cfg,
+                        label_a=label_a,
+                        label_b=label_b,
                     )
                     if result[0] is None or result[2] is None:
                         # Curator reset failed. The loop is infinite — a failed
