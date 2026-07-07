@@ -887,3 +887,116 @@ def test_api_chains_launch_strips_focus_whitespace(tmp_path):
         assert "--focus" not in captured_argv[0]
     finally:
         server.shutdown()
+
+
+# --- Security posture: loopback default, no CORS grants, origin gate ---
+
+
+def test_default_bind_is_loopback():
+    """run_server must not expose the dashboard to the network by default.
+
+    The launch endpoint starts agents with --dangerously-skip-permissions;
+    reaching the dashboard is equivalent to file/command access for the
+    user running it. Network exposure must be an explicit --host opt-in.
+    """
+    import inspect
+    sig = inspect.signature(uisrv.run_server)
+    assert sig.parameters["host"].default == "127.0.0.1"
+
+
+def test_responses_carry_no_cors_wildcard():
+    """API responses must not grant other websites read access.
+
+    The dashboard is same-origin with this server, so it needs no CORS
+    headers at all; a wildcard here would let any web page a user visits
+    read chain logs and project listings out of their browser.
+    """
+    server = _start_server()
+    try:
+        host, port = server.server_address
+        resp = urlopen(Request(f"http://{host}:{port}/api/roles"), timeout=5)
+        assert resp.headers.get("Access-Control-Allow-Origin") is None
+    finally:
+        server.shutdown()
+
+
+def _post_with_origin(server, path, data, origin):
+    host, port = server.server_address
+    req = Request(
+        f"http://{host}:{port}{path}",
+        data=json.dumps(data).encode("utf-8"),
+        method="POST",
+    )
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Origin", origin)
+    try:
+        resp = urlopen(req, timeout=5)
+        return resp.status, json.loads(resp.read())
+    except HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
+def test_post_with_foreign_origin_rejected():
+    """A browser request stamped with another site's Origin gets 403.
+
+    This is the drive-by case: a malicious page firing POSTs at
+    localhost:8420 from inside the user's browser.
+    """
+    server = _start_server()
+    try:
+        status, data = _post_with_origin(
+            server, "/api/chains", {"seed": "launch me"},
+            origin="http://evil.example",
+        )
+        assert status == 403
+        assert "cross-origin" in data.get("error", "")
+    finally:
+        server.shutdown()
+
+
+def test_post_with_matching_origin_passes_gate():
+    """Origin matching the Host header (the dashboard's own requests) is let
+    through — proven by reaching ordinary validation (400 seed-required
+    instead of 403)."""
+    server = _start_server()
+    try:
+        host, port = server.server_address
+        status, data = _post_with_origin(
+            server, "/api/chains", {"seed": ""},
+            origin=f"http://{host}:{port}",
+        )
+        assert status == 400
+        assert data.get("error") == "seed is required"
+    finally:
+        server.shutdown()
+
+
+def test_post_without_origin_passes_gate():
+    """curl/scripts send no Origin header; they are not the attack this
+    gate exists for and must keep working."""
+    server = _start_server()
+    try:
+        status, data = _post_json(server, "/api/chains", {"seed": ""})
+        assert status == 400
+        assert data.get("error") == "seed is required"
+    finally:
+        server.shutdown()
+
+
+def test_delete_with_foreign_origin_rejected():
+    server = _start_server()
+    try:
+        host, port = server.server_address
+        req = Request(
+            f"http://{host}:{port}/api/chains/whatever-id",
+            method="DELETE",
+        )
+        req.add_header("Origin", "http://evil.example")
+        try:
+            resp = urlopen(req, timeout=5)
+            status = resp.status
+        except HTTPError as e:
+            status = e.code
+        assert status == 403
+    finally:
+        server.shutdown()

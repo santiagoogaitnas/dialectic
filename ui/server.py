@@ -42,24 +42,48 @@ def _safe_chain_id(chain_id: str) -> bool:
 
 
 def _json_response(handler, data, status=200):
-    """Send a JSON response."""
+    """Send a JSON response.
+
+    No CORS headers on purpose: the dashboard page is served by this
+    same server, so its requests are same-origin and need none. A CORS
+    header here would only grant *other* websites permission to read
+    these responses out of the user's browser.
+    """
     body = json.dumps(data).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("Access-Control-Allow-Origin", "*")
     handler.end_headers()
     handler.wfile.write(body)
 
 
 def _sse_response(handler):
-    """Begin an SSE response (headers only)."""
+    """Begin an SSE response (headers only). Same-origin only — see _json_response."""
     handler.send_response(200)
     handler.send_header("Content-Type", "text/event-stream")
     handler.send_header("Cache-Control", "no-cache")
     handler.send_header("Connection", "keep-alive")
-    handler.send_header("Access-Control-Allow-Origin", "*")
     handler.end_headers()
+
+
+def _state_change_allowed(handler) -> bool:
+    """Gate for endpoints with side effects (launch/stop chains).
+
+    Browsers stamp cross-site requests with an Origin header. If that
+    Origin's host:port doesn't match the Host header the request was
+    addressed to, some other website is driving this user's browser at
+    us (a drive-by request to localhost) — refuse it. Requests with no
+    Origin header (curl, scripts) are allowed: they aren't browser
+    cross-site requests, which is the only attack this gate is for.
+    Comparing Origin to Host (rather than to a localhost allowlist)
+    keeps deliberate LAN exposure via --host 0.0.0.0 working.
+    """
+    origin = handler.headers.get("Origin")
+    if not origin:
+        return True
+    host = handler.headers.get("Host", "")
+    netloc = urlparse(origin).netloc
+    return bool(netloc) and netloc == host
 
 
 def _read_chain_log(chain_id: str, tail_lines: int = 100) -> str:
@@ -367,6 +391,9 @@ class DialecticHandler(SimpleHTTPRequestHandler):
             pass
 
     def do_POST(self):
+        if not _state_change_allowed(self):
+            _json_response(self, {"error": "cross-origin request rejected"}, 403)
+            return
         parsed = urlparse(self.path)
         path = parsed.path
 
@@ -409,6 +436,9 @@ class DialecticHandler(SimpleHTTPRequestHandler):
         _json_response(self, {"error": "not found"}, 404)
 
     def do_DELETE(self):
+        if not _state_change_allowed(self):
+            _json_response(self, {"error": "cross-origin request rejected"}, 403)
+            return
         parsed = urlparse(self.path)
         path = parsed.path
 
@@ -422,15 +452,7 @@ class DialecticHandler(SimpleHTTPRequestHandler):
 
         _json_response(self, {"error": "not found"}, 404)
 
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-
-
-def run_server(port: int = 8420, host: str = "0.0.0.0"):
+def run_server(port: int = 8420, host: str = "127.0.0.1"):
     # ThreadingHTTPServer is required: SSE connections hold a socket for up to
     # 10 minutes each, and the stdlib HTTPServer is single-threaded, so a
     # single open log viewer would freeze every other API request.
@@ -451,6 +473,9 @@ if __name__ == "__main__":
     )
     parser = argparse.ArgumentParser(description="Dialectic web UI")
     parser.add_argument("--port", type=int, default=8420, help="Port (default: 8420)")
-    parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="Bind host (default: 127.0.0.1, reachable only from "
+                             "this machine; pass 0.0.0.0 to deliberately expose "
+                             "the dashboard to your network)")
     args = parser.parse_args()
     run_server(args.port, args.host)
